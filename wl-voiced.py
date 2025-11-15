@@ -11,8 +11,9 @@ from faster_whisper import WhisperModel
 
 
 class VoiceDaemon:
-    def __init__(self, model_size="base"):
+    def __init__(self, model_size="base", language="en"):
         self.model = WhisperModel(model_size, device="cpu", compute_type="int8")
+        self.language = language
         self.recording = False
         self.audio_data = []
 
@@ -26,7 +27,9 @@ class VoiceDaemon:
     def StopRecording(self):
         if self.recording:
             self.recording = False
-            self._notify_user("Recording stopped, transcribing...", color="0xffffff00", duration=3000)
+            self._notify_user(
+                "Recording stopped, transcribing...", color="0xffffff00", duration=3000
+            )
             threading.Thread(target=self._transcribe_and_copy).start()
 
     def _record_audio(self):
@@ -41,7 +44,7 @@ class VoiceDaemon:
     def _transcribe_and_copy(self):
         if self.audio_data:
             audio = np.concatenate(self.audio_data, axis=0).flatten()
-            segments, info = self.model.transcribe(audio, language="ru")
+            segments, info = self.model.transcribe(audio, language=self.language)
             text = " ".join([segment.text for segment in segments])
             subprocess.run(["wl-copy"], input=text.encode("utf-8"))
             message = f"Text copied to clipboard: {text[:50]}..."
@@ -55,9 +58,10 @@ class VoiceDaemon:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="wl-voice daemon")
     parser.add_argument("--model", default="base", help="Whisper model size")
+    parser.add_argument("--language", default="en", help="Language for transcription (default: en)")
     args = parser.parse_args()
 
-    daemon = VoiceDaemon(args.model)
+    daemon = VoiceDaemon(args.model, args.language)
 
     # Create Unix socket
     socket_path = "/tmp/wl-voice.sock"
