@@ -9,6 +9,7 @@ import sounddevice as sd
 import numpy as np
 from faster_whisper import WhisperModel
 
+
 class VoiceDaemon:
     def __init__(self, model_size="base"):
         self.model = WhisperModel(model_size, device="cpu", compute_type="int8")
@@ -19,11 +20,13 @@ class VoiceDaemon:
         if not self.recording:
             self.recording = True
             self.audio_data = []
+            self._notify_user("Recording started", color="0xff00ff00", duration=3000)
             threading.Thread(target=self._record_audio).start()
 
     def StopRecording(self):
         if self.recording:
             self.recording = False
+            self._notify_user("Recording stopped, transcribing...", color="0xffffff00", duration=3000)
             threading.Thread(target=self._transcribe_and_copy).start()
 
     def _record_audio(self):
@@ -38,25 +41,26 @@ class VoiceDaemon:
     def _transcribe_and_copy(self):
         if self.audio_data:
             audio = np.concatenate(self.audio_data, axis=0).flatten()
-            segments, info = self.model.transcribe(audio, language="en")
+            segments, info = self.model.transcribe(audio, language="ru")
             text = " ".join([segment.text for segment in segments])
-            subprocess.run(['wl-copy'], input=text.encode('utf-8'))
-            self._notify_user(text)
+            subprocess.run(["wl-copy"], input=text.encode("utf-8"))
+            message = f"Text copied to clipboard: {text[:50]}..."
+            self._notify_user(message)
 
-    def _notify_user(self, text):
+    def _notify_user(self, message, color="0xffffffff", duration=5000):
         # Send hyprctl notification
-        message = f'Text copied to clipboard: {text[:50]}...'
-        subprocess.run(['hyprctl', 'notify', '0', '5000', '0xffffffff', message])
+        subprocess.run(["hyprctl", "notify", "0", str(duration), color, message])
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='wl-voice daemon')
-    parser.add_argument('--model', default='base', help='Whisper model size')
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="wl-voice daemon")
+    parser.add_argument("--model", default="base", help="Whisper model size")
     args = parser.parse_args()
 
     daemon = VoiceDaemon(args.model)
 
     # Create Unix socket
-    socket_path = '/tmp/wl-voice.sock'
+    socket_path = "/tmp/wl-voice.sock"
     if os.path.exists(socket_path):
         os.unlink(socket_path)
 
@@ -69,17 +73,24 @@ if __name__ == '__main__':
         while True:
             client_socket, _ = server_socket.accept()
             try:
-                data = client_socket.recv(1024).decode('utf-8').strip()
-                if data == 'start':
+                data = client_socket.recv(1024).decode("utf-8").strip()
+                if data == "start":
                     daemon.StartRecording()
-                    client_socket.send(b'ok')
-                elif data == 'stop':
+                    client_socket.send(b"ok")
+                elif data == "stop":
                     daemon.StopRecording()
-                    client_socket.send(b'ok')
+                    client_socket.send(b"ok")
+                elif data == "toggle":
+                    if daemon.recording:
+                        daemon.StopRecording()
+                        client_socket.send(b"stopped")
+                    else:
+                        daemon.StartRecording()
+                        client_socket.send(b"started")
                 else:
-                    client_socket.send(b'error: unknown command')
+                    client_socket.send(b"error: unknown command")
             except Exception as e:
-                client_socket.send(f'error: {str(e)}'.encode('utf-8'))
+                client_socket.send(f"error: {str(e)}".encode("utf-8"))
             finally:
                 client_socket.close()
     except KeyboardInterrupt:

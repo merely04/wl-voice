@@ -5,7 +5,7 @@ import socket
 
 def main():
     parser = argparse.ArgumentParser(description='wl-voice CLI')
-    parser.add_argument('action', choices=['start', 'stop'], help='Action to perform')
+    parser.add_argument('action', choices=['start', 'stop', 'toggle'], help='Action to perform')
     args = parser.parse_args()
 
     socket_path = '/tmp/wl-voice.sock'
@@ -21,6 +21,10 @@ def main():
                 print("Recording started")
             elif args.action == 'stop':
                 print("Recording stopped, transcribing...")
+        elif response == 'started':
+            print("Recording started")
+        elif response == 'stopped':
+            print("Recording stopped, transcribing...")
         else:
             print(f"Error: {response}")
     except FileNotFoundError:
